@@ -11,7 +11,9 @@ Please be patient as we work to improve coverage and robustness.
 Directory Overview
 ------------------
 
-- IRDS/
+
+```
+  IRDS/
   ├── cli-frontend.py      # Apply Clang and opt with preprocessing rules to generate optimized IR and logs
   ├── cli-backend.py       # Assemble the final dataset from generated IR/logs and apply filtering
   ├── config/              # Global config files (YAML and Python)
@@ -28,26 +30,15 @@ Directory Overview
   │   ├── opt_verify.py        # Batch IR syntax verification
   │   └── others...
   └── utils/              # Logging, concurrency, token statistics, etc.
+```
 
-- Reproduce/
-  Contains scripts and CSV files for reproducing key experimental results.
-
-- datasets/
-  Where all processed IR datasets and logs are stored.
-
-- test/
+```
+  test/
   ├── cfiles/             # Test C programs for generating IR
   └── clean.sh            # Script to clean temporary files
+```
 
-- Bugs/                   # (Optional) Bug-triggering samples or debug logs
-
-- Docs/                   # Documentation, appendices, and figures
-
-- LICENSE                 # Open-source license
-
-- README.md / README.txt  # This file
-
-- requirements.txt        # Python dependencies
+- Docs → Documentation, appendices, and figures
 
 Getting Started
 ---------------
@@ -72,11 +63,6 @@ Getting Started
 6. Model training:
    Use `llm/train.py` and `llm/mkdataset.py` to prepare and fine-tune models
 
-Citation & License
-------------------
 
-This project is part of the IR-OptSet paper (NeurIPS 2025 submission).
-All code and data are released under the specified LICENSE file.
-
-For questions or contributions, visit:
-https://github.com/YangziResearch/IR-OptSet
+📦 The associated dataset is publicly available at:
+https://huggingface.co/datasets/YangziResearch/IR-OptSet
