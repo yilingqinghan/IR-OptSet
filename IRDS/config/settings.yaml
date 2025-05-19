@@ -7,6 +7,8 @@ llvm_extract:
 llvm_nm:
 llvm_dis:
 llvm_as:
+llvm_mca:
+llc:
 tokenizer:
 alive2:
 

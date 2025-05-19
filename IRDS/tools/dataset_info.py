@@ -1,3 +1,5 @@
+from typing import Any, List, Optional
+import sys
 import os
 import argparse
 from datasets import load_from_disk
@@ -9,33 +11,46 @@ from rich.table import Table
 from rich.progress import track
 from rich import box
 from rich.panel import Panel
-from rich.columns import Columns
 from rich.rule import Rule
-from rich.progress import Progress
-from rich.bar import Bar
 from rich.text import Text
 import matplotlib.pyplot as plt
 
 class DatasetStats:
-    def __init__(self, root_path, model_path, max_length=4096):
-        """
-        Initialize the dataset statistics tool.
-        :param root_path: Root path containing train/valid/test folders.
-        :param model_path: Path to the pre-trained model.
-        :param max_length: Maximum token length when tokenizing.
-        """
+    """Compute and display token statistics for text datasets.
+
+    Args:
+        root_path (str): Path containing train/valid/test folders.
+        model_path (str): Path or name of the pretrained tokenizer.
+        max_length (int): Maximum number of tokens per sample.
+    """
+    def __init__(self, root_path: str, model_path: str, max_length: int = 4096) -> None:
         self.root_path = root_path
+        # Validate dataset root path
+        if not os.path.isdir(self.root_path):
+            self.console = Console()
+            self.console.print(f"[red]Dataset root not found: {self.root_path}[/red]")
+            sys.exit(1)
         self.model_path = model_path
         self.max_length = max_length
         self.console = Console()
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        # Load tokenizer and handle errors
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        except Exception as e:
+            self.console.print(f"[red]Failed to load tokenizer from {model_path}: {e}[/red]")
+            sys.exit(1)
         self.datasets = {}  # Mapping from split name -> dataset
 
-    def _extract_text(self, data_point):
-        """
-        Robustly extract text from a data point. Supports:
-          1) data_point is a string
-          2) data_point is a dict with keys like 'prompt', 'text', 'content'
+    def _extract_text(self, data_point: Any) -> str:
+        """Extract text from a data point.
+
+        Supports raw strings or dicts with keys 'prompt', 'text', or 'content'.
+
+        Args:
+            data_point (Any): A dataset entry.
+
+        Returns:
+            str: Extracted text.
         """
         if isinstance(data_point, str):
             return data_point
@@ -45,20 +60,14 @@ class DatasetStats:
         # Fallback: string‑ify whole dict
         return str(data_point)
 
-    def load_all_datasets(self):
-        """
-        Load a dataset from the root path. Handles DatasetDict and Dataset.
-        """
-        if not os.path.exists(self.root_path):
-            self.console.print(f"[red]Root path does not exist: {self.root_path}[/red]")
-            return
-
-        try:
-            ds = load_from_disk(self.root_path)
-        except Exception as e:
-            self.console.print(f"[red]Failed to load dataset: {e}[/red]")
-            return
-
+    def load_all_datasets(self) -> None:
+        """Load a dataset from the root path. Handles DatasetDict and Dataset."""
+        with self.console.status("Loading dataset...", spinner="dots"):
+            try:
+                ds = load_from_disk(self.root_path)
+            except Exception as e:
+                self.console.print(f"[red]Failed to load dataset: {e}[/red]")
+                return
         # Determine type and register splits
         if isinstance(ds, DatasetDict):
             for split_name, subset in ds.items():
@@ -70,29 +79,33 @@ class DatasetStats:
         else:
             self.console.print("[red]Unsupported dataset type.[/red]")
 
-    def calculate_token_lengths(self, dataset):
+    def calculate_token_lengths(self, dataset: Dataset) -> List[int]:
+        """Tokenize samples and compute their token lengths.
+
+        Args:
+            dataset (Dataset): A Hugging Face Dataset split.
+
+        Returns:
+            List[int]: Token lengths for each sample.
         """
-        Calculate token lengths for all samples in a dataset.
-        :param dataset: The dataset object.
-        :return: A list of token lengths.
-        """
-        token_lengths = []
-        for data_point in track(dataset, description="Tokenizing samples..."):
-            text = self._extract_text(data_point)
-            tokens = self.tokenizer(
-                text,
-                truncation=True,
-                max_length=self.max_length,
-                padding=False
-            )
-            token_lengths.append(len(tokens['input_ids']))
+        token_lengths: List[int] = []
+        for i, data_point in enumerate(track(dataset, description="Tokenizing samples..."), start=1):
+            try:
+                text = self._extract_text(data_point)
+                tokens = self.tokenizer(text, truncation=True, max_length=self.max_length, padding=False)
+                token_lengths.append(len(tokens["input_ids"]))
+            except Exception as e:
+                self.console.print(f"[red]Tokenization error at sample {i}: {e}, skipping[/red]")
+                continue
         return token_lengths
 
-    def show_statistics(self, draw_histogram=False):
+    def show_statistics(self, draw_histogram: bool = False) -> None:
+        """Display token statistics and optionally plot histograms.
+
+        Args:
+            draw_histogram (bool): Whether to display token length histograms.
         """
-        Print token statistics for each available dataset.
-        If draw_histogram is True, show simple token length histograms.
-        """
+        self.console.rule("Displaying token statistics")
         for split, dataset in self.datasets.items():
             token_lengths = self.calculate_token_lengths(dataset)
 
@@ -121,12 +134,15 @@ class DatasetStats:
             if draw_histogram:
                 self.draw_histogram(token_lengths, split)
 
-    def draw_histogram(self, token_lengths, split):
-        """
-        Draws a simple histogram of token lengths using matplotlib.
+    def draw_histogram(self, token_lengths: List[int], split: str) -> None:
+        """Draw a histogram of token lengths.
+
+        Args:
+            token_lengths (List[int]): List of token counts.
+            split (str): Dataset split name.
         """
         plt.figure(figsize=(8, 4))
-        plt.hist(token_lengths, bins=20, color="skyblue", edgecolor="black")
+        plt.hist(token_lengths, bins=20)
         plt.title(f"Token Length Distribution - {split}")
         plt.xlabel("Token Length")
         plt.ylabel("Frequency")
@@ -134,19 +150,20 @@ class DatasetStats:
         plt.tight_layout()
         plt.show()
 
-    def preview_samples(self, split, num_samples=5, full_preview=False):
-        """
-        Preview a few samples from the specified dataset split.
-        :param split: Dataset split name ('train', 'valid', 'test').
-        :param num_samples: Number of samples to preview.
-        :param full_preview: Whether to show full sample text without truncation.
+    def preview_samples(self, split: str, num_samples: int = 5, full_preview: bool = False) -> None:
+        """Preview a few samples from the specified dataset split.
+
+        Args:
+            split (str): Dataset split name ('train', 'valid', 'test').
+            num_samples (int): Number of samples to preview.
+            full_preview (bool): Whether to show full sample text without truncation.
         """
         dataset = self.datasets.get(split)
         if not dataset:
             self.console.print(f"[red]No dataset found for split: {split}[/red]")
             return
 
-        self.console.print(Rule(f"[bold cyan]Previewing first {num_samples} samples from {split}[/bold cyan]"))
+        self.console.rule(f"Previewing samples from {split}")
 
         for i in range(min(num_samples, len(dataset))):
             sample = dataset[i]
@@ -157,7 +174,7 @@ class DatasetStats:
             self.console.print(panel)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Dataset Information and Token Statistics Tool")
     parser.add_argument("--root-path", type=str, required=True, help="Path to dataset directory or dataset split folder.")
     parser.add_argument("--model", type=str, required=True, help="Path or name of the pre-trained model.")
@@ -169,7 +186,8 @@ def main():
     parser.add_argument("--draw-hist", action="store_true", help="Draw token length histogram after statistics.")
     args = parser.parse_args()
 
-    stats_tool = DatasetStats(args.root_path, args.model, max_length=args.max_length)
+    with Console().status("Initializing DatasetStats...", spinner="dots"):
+        stats_tool = DatasetStats(args.root_path, args.model, max_length=args.max_length)
     stats_tool.load_all_datasets()
 
     # Auto-select split if not provided

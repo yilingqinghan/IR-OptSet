@@ -1,30 +1,3 @@
-# EXPERIMENTAL! We recommend using LLVM : opt -passes=verify
-# Don't support IR under LLVM 19, otherwise may:ERROR: Unsupported instruction
-# ⚠️ Limitations of using alive-tv for LLVM IR verification:
-
-# 1. **Unsupported Instructions**: `alive-tv` may not support certain LLVM IR instructions,
-#    especially those introduced in newer LLVM versions (e.g., LLVM 19 and above). This can lead
-#    to errors such as "ERROR: Unsupported instruction".
-
-# 2. **Limited Intrinsic Support**: Some LLVM intrinsics are not supported by `alive-tv`, which
-#    may cause verification failures or inaccurate results.
-
-# 3. **Memory Model Constraints**: `alive-tv` has limitations in modeling complex memory behaviors,
-#    which can affect the accuracy of verification for transformations involving memory operations.
-
-# 4. **Interprocedural Optimization**: `alive-tv` does not support interprocedural optimizations,
-#    limiting its applicability for certain types of LLVM IR transformations.
-
-# 5. **SMT Solver Timeouts**: The underlying SMT solver used by `alive-tv` may experience timeouts
-#    when dealing with complex or large IR inputs, leading to incomplete verification.
-
-# 6. **Undefined Behavior Handling**: `alive-tv` may not accurately model undefined behaviors
-#    present in the IR, which can result in misleading verification outcomes.
-
-# Recommendation:
-# For comprehensive verification, consider using LLVM's built-in verifier with `opt -passes=verify`
-# as a primary check. Use `alive-tv` as a supplementary tool for specific cases where its
-# capabilities align with the IR constructs being verified.
 import csv
 import subprocess
 import re
@@ -36,21 +9,49 @@ import argparse
 console = Console()
 
 class IRProcessor:
+    """
+    A utility class for processing LLVM IR content.
+    Provides static methods to clean IR text, extract global sections,
+    and extract function definitions from IR files.
+    """
+
     @staticmethod
     def clean_ir_content(ir_content: str) -> str:
+        """
+        Cleans the given LLVM IR content by removing comments, metadata,
+        and irrelevant lines such as source filename and target info.
+
+        Args:
+            ir_content (str): The raw LLVM IR content as a string.
+
+        Returns:
+            str: The cleaned LLVM IR content.
+        """
         cleaned = []
         for line in ir_content.splitlines():
             s = line.strip()
+            # Skip comments and metadata lines
             if s.startswith((";", "source_filename", "target datalayout", "target triple")):
                 continue
             if s.startswith("!"):
                 continue
+            # Remove metadata annotations like !dbg or !tbaa
             line = re.sub(r'!\w+\b.*?(?=\s|$)', '', line)
             cleaned.append(line)
         return '\n'.join(cleaned)
 
     @staticmethod
     def extract_global_section(ir_content: str) -> str:
+        """
+        Extracts the global declarations section from the LLVM IR content,
+        i.e., all lines before the first function definition.
+
+        Args:
+            ir_content (str): The cleaned LLVM IR content.
+
+        Returns:
+            str: The global declarations section of the IR.
+        """
         lines = ir_content.splitlines()
         globals = []
         for line in lines:
@@ -61,6 +62,16 @@ class IRProcessor:
 
     @staticmethod
     def extract_function(ir_content: str) -> str:
+        """
+        Extracts the first function definition from the LLVM IR content,
+        including the function body enclosed in braces.
+
+        Args:
+            ir_content (str): The cleaned LLVM IR content.
+
+        Returns:
+            str: The extracted function definition including its body.
+        """
         lines = ir_content.splitlines()
         func_lines = []
         in_func = False
@@ -78,8 +89,31 @@ class IRProcessor:
 
 
 def run_alive2(pre_file: Path, post_file: Path, work_dir: Path) -> str:
+    """
+    Runs the Alive2 equivalence checker on a pair of LLVM IR files
+    representing pre- and post-optimization code.
+
+    This function:
+    - Reads and cleans the IR files.
+    - Extracts global declarations and function definitions.
+    - Renames the post function if it has the same name as the pre function.
+    - Combines the IR parts into a single file.
+    - Executes Alive2 with appropriate arguments.
+    - Returns any error output from Alive2.
+
+    Args:
+        pre_file (Path): Path to the pre-optimization IR file.
+        post_file (Path): Path to the post-optimization IR file.
+        work_dir (Path): Working directory to save intermediate files.
+
+    Returns:
+        str: The stderr output from Alive2, typically empty if successful.
+    """
     config = ToolchainConfig()
     alive2 = config.alive2
+    # Verify Alive2 executable exists
+    if not alive2 or not Path(alive2).exists():
+        raise EnvironmentError(f"Alive2 executable not found at {alive2}")
     work_dir.mkdir(parents=True, exist_ok=True)
     combined_path = work_dir / 'combined.ll'
 
@@ -122,11 +156,24 @@ def run_alive2(pre_file: Path, post_file: Path, work_dir: Path) -> str:
 
 
 def extract_ir_pairs(path: Path):
+    """
+    Extracts pairs of pre- and post-optimization LLVM IR code blocks from a file.
+
+    The function removes extraneous tokens and markers, then splits the content
+    into pre and post IR sections based on the marker "[/INST]".
+
+    Args:
+        path (Path): Path to the file containing IR pairs.
+
+    Returns:
+        list of tuples or None: Returns a list with one tuple (pre, post) if successful,
+                                or None if the marker is not found or no valid pairs.
+    """
     text = path.read_text(errors='ignore')
     text = re.sub(r'(?:<s>|</s>|\[INST\]|\[\\INST\]|<code>|</code>|\\n)', '', text)
     text = re.sub('Optimize the following LLVM IR with O3:', '', text)
     text = re.sub('Opt IR:', '', text)
-    
+
     marker = "[/INST]"
     pos = text.find(marker)
     if pos == -1:
@@ -142,30 +189,47 @@ def extract_ir_pairs(path: Path):
         return [(pre, post)]
     return None
 
-def process_folder(input_dir: Path, output_dir: Path, suffix: str = '.model.predict.ll', pad: int = None, pure: bool=False):
-    total = 0
-    failed = 0
-    max_index = 500
+def process_folder(input_dir: Path, output_dir: Path, suffix: str = '.model.predict.ll', pure: bool=False):
+    """
+    Processes a folder of predicted LLVM IR files, runs equivalence checking on each,
+    and summarizes the results.
+
+    For each file matching the suffix in the input directory:
+    - Extracts IR pairs.
+    - Saves pre and post IR to separate files.
+    - Runs Alive2 equivalence checker.
+    - Records success or failure.
+    - Writes a CSV summary of all results.
+
+    Args:
+        input_dir (Path): Directory containing prediction output files.
+        output_dir (Path): Directory to save processed IR and results.
+        suffix (str): File suffix to filter prediction files.
+        pad (int): Optional denominator for pass rate calculation.
+        pure (bool): If True, suppresses detailed logging output.
+
+    Returns:
+        tuple: (total processed, number passed, number failed)
+    """
+    files = sorted(input_dir.glob(f"*{suffix}"))
+    if not files:
+        console.print(f"[yellow]No files found with suffix '{suffix}' in {input_dir}[/yellow]")
+        return 0, 0, 0
     results = []
+    total_files = len(files)
+    failed = 0
 
-    for i in range(1, max_index + 1):
-        file = input_dir / f"{i}{suffix}"
-        if not file.exists():
-            results.append((str(i), 1))
-            continue
-
+    for file in files:
         pairs = extract_ir_pairs(file)
         if pairs is None:
             failed += 1
-            results.append((str(i), 0))
+            results.append((file.name, 0))
             if not pure:
                 console.print(f"[red]{file.name} parsing failed: no code block pair[/red]")
             continue
-
         pair_success = True
         for idx, (pre, post) in enumerate(pairs, start=1):
-            total += 1
-            work = output_dir / f"{i}" / f"pair_{idx}"
+            work = output_dir / file.stem / f"pair_{idx}"
             work.mkdir(parents=True, exist_ok=True)
             (work / 'pre.ll').write_text(pre)
             (work / 'post.ll').write_text(post)
@@ -176,47 +240,67 @@ def process_folder(input_dir: Path, output_dir: Path, suffix: str = '.model.pred
                     console.print(f"[red]{file.name} pair {idx} failed[/red]")
                     console.print(err, markup=False)
         if pair_success:
-            results.append((str(i), 1))
+            results.append((file.name, 1))
         else:
             failed += 1
-            results.append((str(i), 0))
+            results.append((file.name, 0))
 
     csv_path = output_dir / 'result_summary.csv'
     with open(csv_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([idx for idx, _ in results])
-        writer.writerow([res for _, res in results])
+        writer.writerow(['filename', 'passed'])
+        for fname, res in results:
+            writer.writerow([fname, res])
 
-    passed = sum(1 for _, res in results if res == 1)
-    denom = pad if pad is not None else total
-    if pad is not None:
-        passed += max(0, pad - total)
+    passed = sum(res for _, res in results)
+    failed = total_files - passed
 
     if not pure:
-        console.print(f"\n[bold]Summary:[/] Total parsed: {total}, Passed: {passed}, Failed: {failed}")
+        console.print(f"\n[bold]Summary:[/] Total files: {total_files}, Passed: {passed}, Failed: {failed}")
         console.print(f"[green]CSV saved to: {csv_path}[/green]")
 
-    return total, passed, failed
+    return total_files, passed, failed
 
 def main():
+    """
+    Main entry point for command-line execution.
+    Parses arguments, sets up directories, and initiates processing.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-dir', required=True, help='Directory of .model.predict.ll files')
     parser.add_argument('--output-dir', required=True, help='Directory to save IR and combined files')
     parser.add_argument('--pure', action='store_true', help='Suppress logs, output only accuracy and counts')
     parser.add_argument('--suffix', type=str, default='.model.predict.ll', help='Only process files with this suffix')
-    parser.add_argument('--pad', type=int, default=None, help='Use this number as denominator for pass rate instead of total')
+    # --pad argument removed
     args = parser.parse_args()
 
     inp = Path(args.input_dir)
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    total, passed, failed = process_folder(inp, out, suffix=args.suffix, pad=args.pad, pure=args.pure)
+    total_files, passed, failed = process_folder(inp, out, suffix=args.suffix, pure=args.pure)
     if args.pure:
-        denom = args.pad if args.pad is not None else total
-        passed_output = passed
-        rate_percent = (passed_output / denom * 100) if denom > 0 else 0.0
-        print(f"{rate_percent:.3f} {passed_output} {failed}")
+        rate_percent = (passed / total_files * 100) if total_files > 0 else 0.0
+        print(f"{rate_percent:.3f} {passed} {failed}")
 
 if __name__ == '__main__':
     main()
+
+"""
+Example usage:
+
+Assume you have a directory of prediction outputs named `outputs/` where each file is named like `1.model.predict.ll`, `2.model.predict.ll`, ..., and you want to check correctness using Alive2 and save results in `results/`.
+
+You can run:
+    python alive2.py --input-dir outputs --output-dir results
+
+To suppress logs and just get a pass rate:
+    python alive2.py --input-dir outputs --output-dir results --pure
+
+This tool will:
+- Parse each .ll file and extract the pre- and post-optimization IR.
+- Clean and prepare the IR for Alive2.
+- Run Alive2 equivalence checking.
+- Save each IR pair and combined file in results/.
+- Output a CSV summarizing which examples passed.
+"""

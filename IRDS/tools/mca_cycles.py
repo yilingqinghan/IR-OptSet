@@ -1,3 +1,9 @@
+"""
+OptVerifier: Batch-run llc → llvm-mca on LLVM IR files to collect performance metrics into a CSV.
+
+Removes 'pad' functionality; orders based on discovered files.
+Enhances robustness: path validation, exec permission checks, timeouts, and detailed logging.
+"""
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -12,7 +18,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from statistics import mean
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 from rich.console import Console
 from rich.table import Table
@@ -44,7 +50,6 @@ class OptVerifier:
         from_predict: bool,
         extract_before: bool,
         dispatch_width: int,
-        pad: int | None,
         metric: str,
         console: Console | None = None,
     ) -> None:
@@ -58,6 +63,8 @@ class OptVerifier:
         for t in (llc_path, llvm_mca_path):
             if not Path(t).is_file():
                 raise FileNotFoundError(t)
+            if not os.access(t, os.X_OK):
+                raise PermissionError(f"Executable not accessible: {t}")
 
         self.llc = llc_path
         self.llvm_mca = llvm_mca_path
@@ -67,13 +74,23 @@ class OptVerifier:
         self.from_predict = from_predict
         self.extract_before = extract_before
         self.dispatch_width = dispatch_width
-        self.pad = pad
         self.metric = metric  # "cycles" or "rthroughput"
         self.console = console or Console()
         self.error_log: Path  # runtime set
 
     # ------------------------------------------------------------------
     def run(self, root: Path, csv_path: Path) -> None:
+        """Run performance metric extraction on IR files and output a summary CSV.
+
+        Args:
+            root (Path): Directory to scan for LLVM IR files.
+            csv_path (Path): Path to output CSV file.
+        """
+        if not root.is_dir():
+            self.console.print(f"[bold red]Error: root path {root} is not a directory or does not exist")
+            sys.exit(1)
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+
         files = sorted(p for p in root.rglob(f"*{self.suffix}") if p.is_file())
         if not files:
             self.console.print(f"[bold red]No '{self.suffix}' files in {root}")
@@ -82,7 +99,7 @@ class OptVerifier:
         self.error_log = root / "llc_errors.log"
         self.error_log.write_text("", encoding="utf-8")
 
-        metric_by_num: Dict[int, float] = {}
+        metric_by_num: Dict[Any, float] = {}
         errors: List[Tuple[str, str]] = []
 
         self.console.print(f"[bold]Processing {len(files)} files ({self.metric})…")
@@ -92,23 +109,39 @@ class OptVerifier:
                 src = futs[fut]
                 num = self._numeric_prefix(src.name)
                 try:
-                    val = fut.result()  # float or int
-                    metric_by_num[num] = val
-                except Exception as exc:  # pylint: disable=broad-except
-                    metric_by_num[num] = 99999.0     # failure
+                    val = fut.result()
+                    key = num if num >= 0 else src.stem
+                    metric_by_num[key] = val
+                except MCAError as e:
+                    key = num if num >= 0 else src.stem
+                    metric_by_num[key] = 0.0
+                    errors.append((src.name, f"MCAError: {e}"))
+                    self.console.log(f"[yellow]MCAError in {src.name}: {e}")
+                except subprocess.TimeoutExpired as e:
+                    key = num if num >= 0 else src.stem
+                    metric_by_num[key] = float('nan')
+                    errors.append((src.name, f"Timeout: {e}"))
+                    self.console.log(f"[red]Timeout in {src.name}: {e}")
+                except Exception as exc:
+                    key = num if num >= 0 else src.stem
+                    metric_by_num[key] = float('nan')
                     errors.append((src.name, str(exc)))
-                    self.console.log(f"[yellow]⚠️  {src.name}: {exc}")
-
-        # fill missing with 0
-        if self.pad is not None:
-            for i in range(1, self.pad + 1):
-                metric_by_num.setdefault(i, 0.0)
+                    self.console.log(f"[red]Error in {src.name}: {exc}")
 
         self._write_csv(csv_path, metric_by_num)
         self._print_summary(metric_by_num, errors)
 
     # ------------------------------------------------------------------
     def _process_file(self, ll_file: Path) -> float:
+        """Process a single IR file: optionally extract IR, run llc and llvm-mca, and return the metric.
+
+        Args:
+            ll_file (Path): Path to the input LLVM IR file.
+        Returns:
+            float: Measured performance metric.
+        Raises:
+            RuntimeError, MCAError, TimeoutExpired
+        """
         # optional extraction
         if self.from_predict:
             txt = ll_file.read_text(encoding="utf-8", errors="ignore")
@@ -129,13 +162,14 @@ class OptVerifier:
 
         # llc
         llc_cmd = [self.llc, "-march=x86-64", "-o", "-", llc_input]
-        llc_proc = subprocess.run(llc_cmd, text=True, capture_output=True)
+        try:
+            llc_proc = subprocess.run(llc_cmd, text=True, capture_output=True, timeout=60)
+        except subprocess.TimeoutExpired as e:
+            with self.error_log.open("a", encoding="utf-8") as log:
+                log.write(f"{ll_file.name} llc timeout: {e}\n")
+            raise RuntimeError("llc timed out; see llc_errors.log")
 
-        llc_failed = (
-            llc_proc.returncode != 0
-            or re.search(r"(?i)\berror:", llc_proc.stderr)  # 不区分大小写匹配 “error:”
-        )
-        if llc_failed:
+        if llc_proc.returncode != 0 or re.search(r"(?i)\berror:", llc_proc.stderr):
             with self.error_log.open("a", encoding="utf-8") as log:
                 log.write(f"{ll_file.name} llc failed:\n{llc_proc.stderr}\n")
             raise RuntimeError("llc failed; see llc_errors.log")
@@ -146,7 +180,15 @@ class OptVerifier:
             f"-mcpu={self.mca_cpu}",
             f"--dispatch={self.dispatch_width}",
         ]
-        mca_proc = subprocess.run(mca_cmd, text=True, input=llc_proc.stdout, capture_output=True, check=True)
+        try:
+            mca_proc = subprocess.run(
+                mca_cmd, text=True, input=llc_proc.stdout,
+                capture_output=True, check=True, timeout=60
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"llvm-mca timeout on {ll_file.name}: {e}")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"llvm-mca failed: {e.stderr}")
 
         if self.metric == "cycles":
             mat = _RE_TOTAL_CYCLES.search(mca_proc.stdout)
@@ -160,10 +202,16 @@ class OptVerifier:
             return float(mat.group(1))
 
     # ------------------------------------------------------------------
-    def _write_csv(self, path: Path, data: Dict[int, float]) -> None:
-        order = list(range(1, self.pad + 1)) if self.pad else sorted(data)
-        headers = [f"{i}{self.suffix}" for i in order]
-        values = [str(data.get(i, 0)) for i in order]
+    def _write_csv(self, path: Path, data: Dict[Any, float]) -> None:
+        """Write metrics dictionary to CSV, ordered by discovered keys.
+
+        Args:
+            path (Path): Output CSV path.
+            data (Dict[Any, float]): Mapping from file key to measured value.
+        """
+        order = sorted(data.keys(), key=lambda k: str(k))
+        headers = [f"{k}{self.suffix}" for k in order]
+        values = [str(data.get(k, 0)) for k in order]
 
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="", encoding="utf-8") as fh:
@@ -172,7 +220,13 @@ class OptVerifier:
             w.writerow([self.metric, *values])
 
     # ------------------------------------------------------------------
-    def _print_summary(self, data: Dict[int, float], errors: List[Tuple[str, str]]) -> None:
+    def _print_summary(self, data: Dict[Any, float], errors: List[Tuple[str, str]]) -> None:
+        """Print summary table and detailed error table if any.
+
+        Args:
+            data (Dict[Any, float]): Mapping of file keys to metrics.
+            errors (List[Tuple[str, str]]): List of (filename, error message).
+        """
         ok_vals = [v for v in data.values() if v not in (0, 99999)]
         processed = len(ok_vals)
         avg = mean(ok_vals) if ok_vals else 0.0
@@ -195,6 +249,7 @@ class OptVerifier:
     # ------------------------------------------------------------------
     @staticmethod
     def _numeric_prefix(name: str) -> int:
+        """Extract leading integer from filename, or return -1 if not numeric."""
         try:
             return int(name.split(".", 1)[0])
         except ValueError:
@@ -203,6 +258,7 @@ class OptVerifier:
 
 # ----------------------------------------------------------------------
 def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
     p = argparse.ArgumentParser(description="Batch llc → llvm-mca → transposed CSV")
     p.add_argument("root", type=Path, help="Directory to scan")
     p.add_argument("--csv", type=Path, default=Path("results.csv"))
@@ -210,18 +266,18 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--from-predict", action="store_true")
     p.add_argument("--extract-before", action="store_true",
                    help="With --from-predict: extract text before [/INST]")
-    p.add_argument("--pad", type=int, help="Pad to N columns; missing→0, fail→99999")
     p.add_argument("--metric", choices=["cycles", "rthroughput"], default="cycles",
                    help="cycles=Total Cycles (int) | rthroughput=Block RThroughput (float)")
     p.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     p.add_argument("--llc", dest="llc_path")
     p.add_argument("--llvm-mca", dest="llvm_mca_path")
-    p.add_argument("--mcpu", default="znver3")
+    p.add_argument("--mcpu", default="znver4")
     p.add_argument("--dispatch-width", type=int, default=6)
     return p.parse_args(argv)
 
 
 def main(argv: List[str] | None = None) -> None:
+    """Entry point: construct OptVerifier and run."""
     a = _parse_args(argv)
     verifier = OptVerifier(
         llc_path=a.llc_path,
@@ -232,7 +288,6 @@ def main(argv: List[str] | None = None) -> None:
         from_predict=a.from_predict,
         extract_before=a.extract_before,
         dispatch_width=a.dispatch_width,
-        pad=a.pad,
         metric=a.metric,
     )
     verifier.run(a.root, a.csv)

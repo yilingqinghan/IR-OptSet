@@ -13,21 +13,21 @@ class ToolchainConfig:
             with open(config_path, "r") as f:
                 settings = yaml.safe_load(f) or {}
 
-        self.clang = os.environ.get("CLANG_PATH") or settings.get("clang")
-        self.clangpp = os.environ.get("CLANGPP_PATH") or settings.get("clangpp")
-        self.opt = os.environ.get("OPT_PATH") or settings.get("opt")
-        self.flang = os.environ.get("FLANG_PATH") or settings.get("flang")
-        self.extralib = os.environ.get("EXTRA_LIB_PATH") or settings.get("extralib")
-        self.wandb = os.environ.get("WANB_API") or settings.get("wandb")
-        self.llvm = os.environ.get("LLVM_SRC") or settings.get("llvm")
-        self.llvm_nm = os.environ.get("NM_PATH") or settings.get("llvm_nm")
-        self.llvm_extract = os.environ.get("EX_PATH") or settings.get("llvm_extract")
-        self.llvm_dis = os.environ.get("DIS_PATH") or settings.get("llvm_dis")
-        self.llvm_as = os.environ.get("AS_PATH") or settings.get("llvm_as")
-        self.llvm_mca = os.environ.get("MCA_PATH") or settings.get("llvm_mca")
-        self.llc = os.environ.get("LLC_PATH") or settings.get("llc")
-        self.tokenizer = os.environ.get("TOKENIZER_MODEL") or settings.get("tokenizer")
-        self.alive2 = os.environ.get("ALIVE2") or settings.get("alive2")
+        self.clang = settings.get("clang") or os.environ.get("CLANG_PATH")
+        self.clangpp = settings.get("clangpp") or os.environ.get("CLANGPP_PATH")
+        self.opt = settings.get("opt") or os.environ.get("OPT_PATH")
+        self.flang = settings.get("flang") or os.environ.get("FLANG_PATH")
+        self.extralib = settings.get("extralib") or os.environ.get("EXTRA_LIB_PATH")
+        self.wandb = settings.get("wandb") or os.environ.get("WANB_API")
+        self.llvm = settings.get("llvm") or os.environ.get("LLVM_SRC")
+        self.llvm_nm = settings.get("llvm_nm") or os.environ.get("NM_PATH")
+        self.llvm_extract = settings.get("llvm_extract") or os.environ.get("EX_PATH")
+        self.llvm_dis = settings.get("llvm_dis") or os.environ.get("DIS_PATH")
+        self.llvm_as = settings.get("llvm_as") or os.environ.get("AS_PATH")
+        self.llvm_mca = settings.get("llvm_mca") or os.environ.get("MCA_PATH")
+        self.llc = settings.get("llc") or os.environ.get("LLC_PATH")
+        self.tokenizer = settings.get("tokenizer") or os.environ.get("TOKENIZER_MODEL")
+        self.alive2 = settings.get("alive2") or os.environ.get("ALIVE2")
 
     def _validate(self):
         missing = []
