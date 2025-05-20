@@ -185,11 +185,21 @@ python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
 
 #### 使用方法：opt_verify.py
 
+```
+
+```
+
 #### 使用方法：alive2.py
+
+```shell
+cd $DIR/IRDS/tools
+python alive2.py --input-dir $DIR/test/alive --suffix ".model.predict.ll" --output-dir ./tmp
+```
 
 #### 使用方法：dataset_info.py
 
 ```shell
+cd $DIR/IRDS/tools
 python dataset_info.py --root-path $DIR/test/tmp/dataset --preview --split test --num-samples 1 --full-preview --draw-hist
 ```
 

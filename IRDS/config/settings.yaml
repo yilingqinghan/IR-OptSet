@@ -10,7 +10,7 @@ llvm_as: /usr/local/bin/llvm-as
 llvm_mca: /usr/local/bin/llvm-mca
 llc: /usr/local/bin/llc
 tokenizer:
-alive2: /usr/local/bin/alive2
+alive2: /usr/local/bin/alive-tv
 
 # Extra linking libraries (optional, if you use custom LLVM passes)
 extralib: /usr/lib/llvm-extra
