@@ -84,12 +84,14 @@
 
 ### 🔨 数据流程
 
+请先设置项目目录:`export DIR=$(pwd)`
+
 1. **生成 IR 数据**
 
    test文件夹里提供了一些测试文件，以供直接测试使用：
 
    ```bash
-   cd IRDS
+   cd $DIR/IRDS
    export PYTHONPATH=$(pwd):$PYTHONPATH
    python cli-frontend.py pipeline \
      --source-dir ../test/cfiles \
@@ -150,6 +152,46 @@
 | `opt_verify.py`      | 批量验证 IR 语法正确性            |
 
 ------
+
+#### 使用方法：mca_cyles.py
+
+```bash
+cd $DIR/IRDS/tools
+python mca_cycles.py $DIR/test/tmp/PRE_OPT/ --suffix ".ll"
+```
+
+​	这样就会打印一个OptVerifier Summary表格：会显示平均周期数和正确和错误数量。还有其他后缀可以选择：
+
+- `--csv 1.csv`：选择输出csv文件，包含具体想要的统计信息
+- `--dispatch-width`：一个int，设置处理器调度宽度（默认为6）
+- `--metric`：默认是cycle，可选rthroughput
+
+> 整合一下就是
+>
+> ```shell
+> python mca_cycles.py $DIR/test/tmp/PRE_OPT/ --suffix ".ll" --dispatch-width 1 --mcpu znver5 --metric rthroughput
+> ```
+
+#### 使用方法：analyze_changed.py
+
+```shell
+cd $DIR/IRDS/tools
+python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
+```
+
+​	这样就会打印一个Pass分析，包含Attempted Passes和Effective Passes
+
+- 如果你添加了`--sample <数字>`和`--seed <数字>`，则会随机挑选给定个文件进行分析，默认情况下是所有.log文件都参与分析
+
+#### 使用方法：opt_verify.py
+
+#### 使用方法：alive2.py
+
+#### 使用方法：dataset_info.py
+
+```
+python dataset_info.py --root-path "$DIR/test/tmp/dataset"  --model "/home/yz/clean/llm-compiler-7b-ftd" --preview --split train --num-samples 1 --full-preview --draw-hist
+```
 
 ### 📄 许可协议
 

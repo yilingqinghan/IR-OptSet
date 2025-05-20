@@ -20,10 +20,10 @@ class DatasetStats:
 
     Args:
         root_path (str): Path containing train/valid/test folders.
-        model_path (str): Path or name of the pretrained tokenizer.
+        model_path (Optional[str]): Path or name of the pretrained tokenizer.
         max_length (int): Maximum number of tokens per sample.
     """
-    def __init__(self, root_path: str, model_path: str, max_length: int = 4096) -> None:
+    def __init__(self, root_path: str, model_path: Optional[str], max_length: int = 4096) -> None:
         self.root_path = root_path
         # Validate dataset root path
         if not os.path.isdir(self.root_path):
@@ -33,12 +33,22 @@ class DatasetStats:
         self.model_path = model_path
         self.max_length = max_length
         self.console = Console()
-        # Load tokenizer and handle errors
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        except Exception as e:
-            self.console.print(f"[red]Failed to load tokenizer from {model_path}: {e}[/red]")
-            sys.exit(1)
+        if model_path is None:
+            # Define dummy tokenizer
+            class DummyTokenizer:
+                def __call__(self, text, truncation=True, max_length=None, padding=False):
+                    length = len(text) // 2
+                    if max_length is not None:
+                        length = min(length, max_length)
+                    return {"input_ids": [0] * length}
+            self.tokenizer = DummyTokenizer()
+        else:
+            # Load tokenizer and handle errors
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            except Exception as e:
+                self.console.print(f"[red]Failed to load tokenizer from {model_path}: {e}[/red]")
+                sys.exit(1)
         self.datasets = {}  # Mapping from split name -> dataset
 
     def _extract_text(self, data_point: Any) -> str:
@@ -177,7 +187,7 @@ class DatasetStats:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dataset Information and Token Statistics Tool")
     parser.add_argument("--root-path", type=str, required=True, help="Path to dataset directory or dataset split folder.")
-    parser.add_argument("--model", type=str, required=True, help="Path or name of the pre-trained model.")
+    parser.add_argument("--model", type=str, required=False, help="Path or name of the pre-trained model.")
     parser.add_argument("--preview", action="store_true", help="Preview a few samples from the dataset.")
     parser.add_argument("--split", type=str, help="Which split to preview (if not set, auto-detect from available).")
     parser.add_argument("--num-samples", type=int, default=5, help="Number of samples to preview (default: 5).")
