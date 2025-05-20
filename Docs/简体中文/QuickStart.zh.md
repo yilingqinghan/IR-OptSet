@@ -89,6 +89,8 @@
    test文件夹里提供了一些测试文件，以供直接测试使用：
 
    ```bash
+   cd IRDS
+   export PYTHONPATH=$(pwd):$PYTHONPATH
    python cli-frontend.py pipeline \
      --source-dir test/cfiles \
      --ext .c \

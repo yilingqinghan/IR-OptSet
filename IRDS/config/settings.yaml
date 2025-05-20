@@ -1,16 +1,16 @@
 # Compiler toolchain paths
-clang: /usr/bin/clang                # Path to clang executable
-clangpp: /usr/bin/clang++             # Path to clang++ executable
-opt: /usr/bin/opt                     # Path to LLVM opt tool
-flang: /usr/bin/flang                 # Path to Fortran frontend (optional)
-llvm_extract:
-llvm_nm:
-llvm_dis:
-llvm_as:
-llvm_mca:
-llc:
-tokenizer:
-alive2:
+clang: /usr/local/bin/clang                # Path to clang executable
+clangpp: /usr/local/bin/clang++            # Path to clang++ executable
+opt: /usr/local/bin/opt                    # Path to LLVM opt tool
+flang: /usr/local/bin/flang                # Path to Fortran frontend (optional)
+llvm_extract: /usr/local/bin/llvm-extract
+llvm_nm: /usr/local/bin/llvm-nm
+llvm_dis: /usr/local/bin/llvm-dis
+llvm_as: /usr/local/bin/llvm-as
+llvm_mca: /usr/local/bin/llvm-mca
+llc: /usr/local/bin/llc
+tokenizer: /usr/local/bin/tokenizer
+alive2: /usr/local/bin/alive2
 
 # Extra linking libraries (optional, if you use custom LLVM passes)
 extralib: /usr/lib/llvm-extra
