@@ -92,19 +92,19 @@
    cd IRDS
    export PYTHONPATH=$(pwd):$PYTHONPATH
    python cli-frontend.py pipeline \
-     --source-dir test/cfiles \
+     --source-dir ../test/cfiles \
      --ext .c \
      --clang-flags "-S -emit-llvm -O3 -Xclang -disable-llvm-passes" \
-     --compile-out test/tmp/UNOPT \
-     --extract-dir test/tmp/EX \
-     --opt-out test/tmp/OPT \
+     --compile-out ../test/tmp/UNOPT \
+     --extract-dir ../test/tmp/EX \
+     --opt-out ../test/tmp/OPT \
      --opt-flags "-passes='default<O3>' -S -print-changed -print-before-changed" \
      --sample-size 10 --seed 1 \
      --rules normalize_structs ensure_entry_block remove_blank remove_comments rename_blocks rename_locals \
      --where all \
-     --log-out test/tmp/LOG \
-     --pre-out test/tmp/PRE_EX \
-     --post-out test/tmp/PRE_OPT
+     --log-out ../test/tmp/LOG \
+     --pre-out ../test/tmp/PRE_EX \
+     --post-out ../test/tmp/PRE_OPT
    ```
 
    **输出目录说明**：
@@ -120,16 +120,16 @@
 
    ```bash
    python cli-backend.py \
-     --pre-dir test/tmp/PRE_EX \
-     --post-dir test/tmp/PRE_OPT \
-     --log-dir test/tmp/LOG \
+     --pre-dir ../test/tmp/PRE_EX \
+     --post-dir ../test/tmp/PRE_OPT \
+     --log-dir ../test/tmp/LOG \
      --filters func_body_changed token_limit_v3 \
      --vfilters keep_core dedupe_content \
-     --out-dir test/tmp/FINAL \
+     --out-dir ../test/tmp/FINAL \
      --make-dataset \
      --train-size 5 --test-size 1 --valid-size 1 --seed 1 \
      --prompt-template "[INST]Analyze IR:\n<code>{pre_ir}</code>[/INST]..." \
-     --dataset-output test/tmp/dataset --token-limit 4096
+     --dataset-output ../test/tmp/dataset --token-limit 4096
    ```
 
    - **filters**: 初筛规则，如 `func_body_changed`（函数体有变化）、`token_limit_v3`（限制 Token 数量）

@@ -9,7 +9,7 @@ llvm_dis: /usr/local/bin/llvm-dis
 llvm_as: /usr/local/bin/llvm-as
 llvm_mca: /usr/local/bin/llvm-mca
 llc: /usr/local/bin/llc
-tokenizer: /usr/local/bin/tokenizer
+tokenizer:
 alive2: /usr/local/bin/alive2
 
 # Extra linking libraries (optional, if you use custom LLVM passes)
