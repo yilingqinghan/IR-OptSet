@@ -189,9 +189,11 @@ python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
 
 #### 使用方法：dataset_info.py
 
+```shell
+python dataset_info.py --root-path $DIR/test/tmp/dataset --preview --split test --num-samples 1 --full-preview --draw-hist
 ```
-python dataset_info.py --root-path "$DIR/test/tmp/dataset"  --model "/home/yz/clean/llm-compiler-7b-ftd" --preview --split train --num-samples 1 --full-preview --draw-hist
-```
+
+​	这将列举出dataset的基本信息：优雅得可视化一个test数据集的数据项，并查看数据集的token数量的统计数据（最大、最小、中位数、平均等等）
 
 ### 📄 许可协议
 
