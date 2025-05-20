@@ -1,4 +1,4 @@
-## IR-OptSet  快速使用
+## IR-OptSet  快速入门
 
 ### 项目简介
 
@@ -11,7 +11,14 @@
 - 使用 `llvm-mca` 进行静态性能分析
 - 合并与检查数据集
 
-------
+>建议您使用docker快速验证我们的环境，可以直接使用如下命令：
+>
+>```shell
+>docker pull ghcr.io/yilingqinghan/llvm-alive2:fulllinux
+>docker run -it ghcr.io/yilingqinghan/llvm-alive2:fulllinux
+>```
+>
+>如此条件下，您可以避免构建复杂的LLVM和Alive2环境，直接跳至[🔨 数据集生成流程](🔨 数据集生成流程)
 
 ### 🔧 先决条件
 
@@ -21,7 +28,7 @@
 
 ------
 
-### 🚀 安装步骤
+### 🚀 安装步骤(约10~30分钟)
 
 1. **克隆仓库**
 
@@ -82,7 +89,7 @@
 
 ------
 
-### 🔨 数据流程
+### 🔨 数据集生成流程
 
 请先设置项目目录:`export DIR=$(pwd)`
 
@@ -140,7 +147,7 @@
 
 ------
 
-### 🔍 工具一览
+### 🔍 其他工具链一览
 
 | 脚本                 | 功能描述                          |
 | -------------------- | --------------------------------- |
@@ -179,15 +186,17 @@ cd $DIR/IRDS/tools
 python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
 ```
 
-​	这样就会打印一个Pass分析，包含Attempted Passes和Effective Passes
+​	这样就会打印一个Pass分析，包含Attempted Passes和Effective Passes。
 
 - 如果你添加了`--sample <数字>`和`--seed <数字>`，则会随机挑选给定个文件进行分析，默认情况下是所有.log文件都参与分析
 
 #### 使用方法：opt_verify.py
 
+```shell
+python opt_verify.py --folder $DIR/test/tmp/FINAL/ --log-errors --log-dir "./logs" --clean --suffix ".ll"
 ```
 
-```
+​	这样就会打印一个表格，捕捉指定后缀文件的数量以及通过opt语法测试的数量，在这里应该是100%正确率。
 
 #### 使用方法：alive2.py
 
@@ -195,6 +204,8 @@ python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
 cd $DIR/IRDS/tools
 python alive2.py --input-dir $DIR/test/alive --suffix ".model.predict.ll" --output-dir ./tmp
 ```
+
+​	如果alive2等价性验证失败，则会打印具体错误，同时最终会输出Pass和失败的个数，以及记录到csv文件（请耐心等待，SMT求解器需要时间）。	
 
 #### 使用方法：dataset_info.py
 
