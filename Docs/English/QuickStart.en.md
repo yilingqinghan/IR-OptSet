@@ -24,7 +24,8 @@
 > git clone https://github.com/yilingqinghan/IR-OptSet.git
 > cd IR-OptSet
 > ```
->
+>> If failed to clone from github, please use https://gitlab.com/759569457/IR-OptSet.git
+> 
 > With this setup, you can skip the manual LLVM and Alive2 build process and jump directly to the [🔨 Dataset Generation Workflow](#-dataset-generation-workflow).
 
 ### 🔧 Prerequisites

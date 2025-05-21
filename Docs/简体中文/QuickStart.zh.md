@@ -21,10 +21,13 @@
 >然后您会进入`/workspace`目录，在此目录内，请clone我的仓库。
 >
 >```shell
+>unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY
 >git clone https://github.com/yilingqinghan/IR-OptSet.git
 >cd IR-OptSet
 >```
 >
+>> 如果克隆失败，请使用 https://gitlab.com/759569457/IR-OptSet.git
+> 
 >如此条件下，您可以避免构建复杂的LLVM和Alive2环境，直接跳至[🔨 数据集生成流程](🔨 数据集生成流程)
 
 ### 🔧 先决条件

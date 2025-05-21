@@ -15,11 +15,12 @@ Once inside the container:
 
 ```bash
 cd /workspace
+unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY
 git clone https://github.com/yilingqinghan/IR-OptSet.git
 cd IR-OptSet
 export DIR=$(pwd)
 ```
-
+> If failed to clone from github, please use https://gitlab.com/759569457/IR-OptSet.git
 ------
 
 ## ✅ Functional Test Checklist
