@@ -18,13 +18,20 @@
 >docker run -it ghcr.io/yilingqinghan/llvm-alive2:fulllinux
 >```
 >
+>然后您会进入`/workspace`目录，在此目录内，请clone我的仓库。
+>
+>```shell
+>git clone https://github.com/yilingqinghan/IR-OptSet.git
+>cd IR-OptSet
+>```
+>
 >如此条件下，您可以避免构建复杂的LLVM和Alive2环境，直接跳至[🔨 数据集生成流程](🔨 数据集生成流程)
 
 ### 🔧 先决条件
 
 - **CMake**、**Ninja**、**Git**、**Python 3.8+**
 - 建议使用 **conda** 管理 Python 环境
-- 大约 **5 GB** 磁盘空间用于基础环境构建
+- ≈**10GB** 磁盘空间用于基础环境构建
 
 ------
 
@@ -91,7 +98,13 @@
 
 ### 🔨 数据集生成流程
 
-请先设置项目目录:`export DIR=$(pwd)`
+​	数据集的生成流程按照前端后端的方式依次进行。
+
+请先设置项目目录:
+
+```shell
+export DIR=$(pwd)
+```
 
 1. **生成 IR 数据**
 
@@ -144,10 +157,14 @@
    - **filters**: 初筛规则，如 `func_body_changed`（函数体有变化）、`token_limit_v3`（限制 Token 数量）
    - **vfilters**: 后筛规则，如 `keep_core`（保留可编译核心 IR）、`dedupe_content`（去重）
    - **prompt-template**: 定义模型输入格式
+   
+   至此则已经有了示范的一个数据集，您可以去`$DIR/test/tmp/dataset`查看。
 
 ------
 
 ### 🔍 其他工具链一览
+
+​	我们同样提供了一些其他辅助工具，无论是用于正确性验证还是自动分析。
 
 | 脚本                 | 功能描述                          |
 | -------------------- | --------------------------------- |

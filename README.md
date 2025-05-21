@@ -2,6 +2,10 @@
 
 **IR-OptSet** is a comprehensive toolchain for constructing, transforming, and analyzing LLVM IR datasets tailored for large language models (LLMs). It is designed to facilitate research on code optimization, transformation understanding, and compiler behavior modeling.
 
+> > For a quick reproduction setup, please refer to [Reproduction Guide](Docs/English/Reproduce.md).
+
+---
+
 ### 🚀 Key Use Cases
 
 - Generate pre- and post-optimization LLVM IR from C code

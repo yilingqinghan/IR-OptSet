@@ -2,35 +2,40 @@
 
 ### Project Overview
 
-**IR-OptSet** is a toolchain designed to automate the construction, filtering, analysis, and creation of LLVM IR datasets. Its core functionalities include:
+**IR-OptSet** is a toolchain for automatically constructing, filtering, analyzing, and generating LLVM IR datasets. Its key features include:
 
-* Building and configuring the LLVM & Alive2 environments
-* Extracting and preprocessing LLVM IR before and after optimization
+* Setting up and configuring LLVM & Alive2 environments
+* Extracting and preprocessing pre-/post-optimization LLVM IR
 * Generating datasets in the Hugging Face format
-* Verifying IR correctness and analyzing optimization passes
-* Performing static performance analysis using `llvm-mca`
+* Validating IR correctness and analyzing optimization passes
+* Performing static performance analysis via `llvm-mca`
 * Merging and inspecting datasets
 
-> We recommend using Docker to quickly verify the environment. You can do so with the following commands:
+> 🚀 **Recommended**: Use Docker to quickly try out our environment with the following commands:
 >
 > ```shell
 > docker pull ghcr.io/yilingqinghan/llvm-alive2:fulllinux
 > docker run -it ghcr.io/yilingqinghan/llvm-alive2:fulllinux
 > ```
 >
-> This allows you to skip the complex LLVM and Alive2 setup and jump straight to the \[🔨 Dataset Generation Process]\(🔨 Dataset Generation Process).
-
----
+> This will place you in the `/workspace` directory. From there, clone the repository:
+>
+> ```shell
+> git clone https://github.com/yilingqinghan/IR-OptSet.git
+> cd IR-OptSet
+> ```
+>
+> With this setup, you can skip the manual LLVM and Alive2 build process and jump directly to the [🔨 Dataset Generation Workflow](#-dataset-generation-workflow).
 
 ### 🔧 Prerequisites
 
 * **CMake**, **Ninja**, **Git**, **Python 3.8+**
-* It is recommended to use **conda** for managing the Python environment
-* Approximately **5 GB** of disk space is required for building the base environment
+* Using **conda** to manage Python environments is recommended
+* Approximately **10GB** of disk space is needed for environment setup
 
 ---
 
-### 🚀 Installation Steps (Approx. 10–30 minutes)
+### 🚀 Installation Steps (10–30 minutes)
 
 1. **Clone the Repository**
 
@@ -68,7 +73,7 @@
    make
    ```
 
-4. **Configure Python Environment**
+4. **Set Up Python Environment**
 
    ```bash
    conda create -n ir-optset python=3.10 -y
@@ -76,10 +81,9 @@
    pip install -r requirements.txt
    ```
 
-5. **Set Tool Paths**
-   Edit `IRDS/config/settings.yaml` and provide paths to LLVM/Alive2 executables:
+5. **Configure Tool Paths**
 
-   Example:
+   Edit `IRDS/config/settings.yaml` and set the paths to LLVM/Alive2 executables. For example:
 
    ```yaml
    clang: /path/to/llvm-project/build/bin/clang
@@ -91,12 +95,19 @@
 
 ---
 
-### 🔨 Dataset Generation Process
+### 🔨 Dataset Generation Workflow
 
-First, set the project directory: `export DIR=$(pwd)`
+The dataset generation process follows a front-end → back-end pipeline.
+
+First, set the project root directory:
+
+```shell
+export DIR=$(pwd)
+```
 
 1. **Generate IR Data**
-   Test files are provided in the `test` folder for quick evaluation:
+
+   The `test` folder contains example `.c` files for immediate testing:
 
    ```bash
    cd $DIR/IRDS
@@ -117,16 +128,16 @@ First, set the project directory: `export DIR=$(pwd)`
      --post-out ../test/tmp/PRE_OPT
    ```
 
-   **Output Directory Descriptions**:
+   **Output Directories:**
 
    * **UNOPT**: Unoptimized IR (.ll)
-   * **EX**: Function-extracted IR
+   * **EX**: Function-level extracted IR
    * **OPT**: Optimized IR
    * **LOG**: Optimization logs
-   * **PRE\_EX**: Preprocessed IR (before)
-   * **PRE\_OPT**: Preprocessed IR (after)
+   * **PRE\_EX**: Preprocessed (before optimization)
+   * **PRE\_OPT**: Preprocessed (after optimization)
 
-2. **Build the Dataset**
+2. **Build Dataset**
 
    ```bash
    python cli-backend.py \
@@ -142,22 +153,26 @@ First, set the project directory: `export DIR=$(pwd)`
      --dataset-output ../test/tmp/dataset --token-limit 4096
    ```
 
-   * **filters**: Preliminary filters (e.g., `func_body_changed`, `token_limit_v3`)
-   * **vfilters**: Validation filters (e.g., `keep_core`, `dedupe_content`)
-   * **prompt-template**: Defines the input format for models
+   * **filters**: Primary filters, e.g., `func_body_changed`, `token_limit_v3`
+   * **vfilters**: Secondary filters, e.g., `keep_core`, `dedupe_content`
+   * **prompt-template**: Defines input prompt format for models
+
+   The final dataset will be available under `$DIR/test/tmp/dataset`.
 
 ---
 
-### 🔍 Additional Toolchain Overview
+### 🔍 Additional Tools
+
+We provide a variety of auxiliary tools for validation and automated analysis:
 
 | Script               | Description                                      |
 | -------------------- | ------------------------------------------------ |
-| `alive2.py`          | Automated equivalence checking using Alive2      |
-| `analyze_changed.py` | Extract and count effective optimization passes  |
-| `dataset_info.py`    | View dataset statistics and examples             |
+| `alive2.py`          | Automatic equivalence checking (Alive2)          |
+| `analyze_changed.py` | Extract & count effective optimization passes    |
+| `dataset_info.py`    | View dataset statistics and samples              |
 | `mca_cycles.py`      | Static performance analysis (`llc` + `llvm-mca`) |
 | `merge_dataset.py`   | Merge multiple dataset samples                   |
-| `opt_verify.py`      | Batch syntax verification of IR                  |
+| `opt_verify.py`      | Batch verify IR syntactic correctness            |
 
 ---
 
@@ -168,15 +183,15 @@ cd $DIR/IRDS/tools
 python mca_cycles.py $DIR/test/tmp/PRE_OPT/ --suffix ".ll"
 ```
 
-This will print an **OptVerifier Summary** table showing average cycle counts, success, and failure counts. Additional options include:
+This prints an **OptVerifier Summary** table showing average cycles and pass/fail counts. Other optional flags:
 
-* `--csv 1.csv`: Output statistics to CSV
-* `--dispatch-width`: Set CPU dispatch width (default: 6)
-* `--metric`: Default is `cycle`; you can also use `rthroughput`
+* `--csv 1.csv`: Export results to CSV
+* `--dispatch-width`: Set processor dispatch width (default 6)
+* `--metric`: Default is `cycle`, optional: `rthroughput`
 
-> Full example:
+> Example:
 >
-> ```shell
+> ```bash
 > python mca_cycles.py $DIR/test/tmp/PRE_OPT/ --suffix ".ll" --dispatch-width 1 --mcpu znver5 --metric rthroughput
 > ```
 
@@ -187,9 +202,9 @@ cd $DIR/IRDS/tools
 python analyze_changed.py --input $DIR/test/tmp/LOG --csv tmp
 ```
 
-This prints an analysis of optimization passes, including attempted and effective ones.
+This outputs an analysis of attempted vs. effective optimization passes.
 
-* Add `--sample <number>` and `--seed <number>` to randomly sample files; by default, all `.log` files are analyzed.
+* Use `--sample <number>` and `--seed <number>` to randomly sample log files (default: all logs)
 
 #### Usage: `opt_verify.py`
 
@@ -197,7 +212,7 @@ This prints an analysis of optimization passes, including attempted and effectiv
 python opt_verify.py --folder $DIR/test/tmp/FINAL/ --log-errors --log-dir "./logs" --clean --suffix ".ll"
 ```
 
-This prints a table showing how many files passed `opt` syntax checks. Expect a 100% pass rate here.
+This checks syntax correctness of `.ll` files and summarizes results (should be 100% valid).
 
 #### Usage: `alive2.py`
 
@@ -206,7 +221,7 @@ cd $DIR/IRDS/tools
 python alive2.py --input-dir $DIR/test/alive --suffix ".model.predict.ll" --output-dir ./tmp
 ```
 
-If Alive2 verification fails, it prints detailed errors. Final summary includes counts of passed and failed cases, saved in a CSV (SMT solving may take time).
+Failed Alive2 equivalence checks will be logged. Final results include pass/fail counts and CSV export (SMT solving may take time).
 
 #### Usage: `dataset_info.py`
 
@@ -215,10 +230,10 @@ cd $DIR/IRDS/tools
 python dataset_info.py --root-path $DIR/test/tmp/dataset --preview --split test --num-samples 1 --full-preview --draw-hist
 ```
 
-This command provides a clear, visual summary of a test dataset and statistics such as token count distributions (max, min, median, mean, etc.).
+This gives a visual and statistical summary of the dataset, including token count distributions (min/median/max/average, etc.).
 
 ---
 
 ### 📄 License
 
-Licensed under the MIT License. See the LICENSE file for details.
+MIT License. See the `LICENSE` file for details.
